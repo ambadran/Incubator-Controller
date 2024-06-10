@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Incubator Controller</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+
+        h1 {
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .column {
+            margin: 0 20px;
+        }
+
+        .column div {
+            margin-bottom: 20px;
+        }
+
+        .label {
+            display: block;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Smart Incubator Controller</h1>
+
+<div class="container">
+    <div class="column">
+        <div>
+            <span class="label">Skin Temperature</span>
+            <span id="skinTemperature">0</span>
+        </div>
+        <div>
+            <span class="label">Cover Closed</span>
+            <span id="coverClosed">0</span>
+        </div>
+        <div>
+            <span class="label">Humidity</span>
+            <span id="humidity">0</span>
+        </div>
+        <div>
+            <span class="label">Temperature</span>
+            <span id="temperature">0</span>
+        </div>
+        <div>
+            <span class="label">Motion Sensor</span>
+            <span id="motionSensor">0</span>
+        </div>
+        <div>
+            <span class="label">O2 Level</span>
+            <span id="o2Level">0</span>
+        </div>
+    </div>
+    <div class="column">
+        <div>
+            <label class="label">Auto / Manual Mode</label>
+            <label class="switch">
+                <input type="checkbox" id="autoManualSwitch">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div>
+            <label class="label">PSU Control</label>
+            <label class="switch">
+                <input type="checkbox" id="psuControl">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div>
+            <label class="label">Blue Light</label>
+            <label class="switch">
+                <input type="checkbox" id="blueLight">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div>
+            <label class="label">UV Light</label>
+            <label class="switch">
+                <input type="checkbox" id="uvLight">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div>
+            <label class="label">Buzzer</label>
+            <label class="switch">
+                <input type="checkbox" id="buzzer">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div>
+            <label class="label">Humidifier</label>
+            <label class="switch">
+                <input type="checkbox" id="humidifier">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+</div>
+
+<script>
+    const sensorIds = ['skinTemperature', 'coverClosed', 'humidity', 'temperature', 'motionSensor', 'o2Level'];
+    const switchIds = ['autoManualSwitch', 'psuControl', 'blueLight', 'uvLight', 'buzzer', 'humidifier'];
+
+    // Function to read sensor values and switch states from the MicroPython MCU
+    async function getValues() {
+        try {
+            const response = await fetch('/get_values');
+            const data = await response.json();
+            sensorIds.forEach(id => {
+                document.getElementById(id).innerText = data[id];
+            });
+            switchIds.forEach(id => {
+                document.getElementById(id).checked = data[id] === 'on';
+            });
+        } catch (error) {
+            console.error('Error getting values:', error);
+        }
+    }
+
+    // Function to send switch states to the MicroPython MCU
+    async function setSwitchState(id, state) {
+        try {
+            await fetch('/set_switch_state', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: id, state: state }),
+            });
+        } catch (error) {
+            console.error('Error setting switch state:', error);
+        }
+    }
+
+    // Event listener for switch changes
+    switchIds.forEach(id => {
+        document.getElementById(id).addEventListener('change', (event) => {
+            const state = event.target.checked ? 'on' : 'off';
+            setSwitchState(id, state);
+        });
+    });
+
+    // Initialize values on page load and update every second
+    window.onload = () => {
+        getValues();
+        setInterval(getValues, 1000);
+    };
+</script>
+
+</body>
+</html>
