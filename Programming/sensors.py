@@ -126,6 +126,7 @@ class Sensors:
         self.mq135.latest_value = (random.getrandbits(3) + 201)/10
         return self.mq135.latest_value
 
+    @property
     def all_values(self):
         '''
         return all the sensor data with the naming 

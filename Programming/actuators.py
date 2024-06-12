@@ -66,6 +66,7 @@ class Actuators:
         else:
             self.handler.control(inside_bound_value)
 
+    @property
     def all_values(self):
         '''
         return all the actuator states with the naming 
