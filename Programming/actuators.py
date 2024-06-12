@@ -6,11 +6,11 @@ from machine import Pin
 from sensors import Sensor
 
 class Actuator:
-'''
+    '''
     Abstract Actuator Object
     '''
     #TODO: remove the other_func_names thing and just re-define the handler for the buzzer as an Actuators method and assign it manually in the init
-    def __init__(self, handler, control: callable=None, other_func_names: list[callable]=[]):
+    def __init__(self, handler, control: callable=None):
         '''
         :param handler: could be anything that is going to be used to read the sensor
         :param control: func to control the actuator, if control func is not defined then it's
@@ -26,11 +26,7 @@ class Actuator:
                 raise ValueError("control parameter not defined for a non `Pin` object")
 
             self.control = self.handler.value
-
-        # setting other control funcs
-        for func_name in other_func_names:
-            method = getattr(Actuators, func_name)
-            setattr(self, func_name, method.__get__(self, self.__class__))
+            self.toggle = self.handler.toggle
 
 class Actuators:
     '''
@@ -41,14 +37,17 @@ class Actuators:
         Constructor for actuator objects
         '''
         self.main_psu: Actuator = Actuator(Pin(main_psu_pin, Pin.OUT))
+
         self.blue_light: Actuator = Actuator(Pin(blue_light_pin, Pin.OUT))
+
         self.uv_light: Actuator = Actuator(Pin(uv_light_pin, Pin.OUT))
-        self.buzzer: Actuator = Actuator(Pin(buzzer_pin, Pin.OUT), other_func_names=[self.beep.__name__])
+
+        self.buzzer: Actuator = Actuator(Pin(buzzer_pin, Pin.OUT))
+        self.buzzer.beep = self.buzzer_beep
+
         self.humidifier: Actuator = Actuator(Pin(humidifier_pin, Pin.OUT))
 
-    # this is a MUST to make it a shared method so that when I assign it to another object dynamically, I don't duplicate it memory.
-    @staticmethod  
-    def beep(self, sound_beep: int):
+    def buzzer_beep(self, sound_beep: int):
         '''
         :param sound_beep: the duration of the beep in ms
         '''
@@ -62,10 +61,10 @@ class Actuators:
         turn off actuator if sensor limits are breached
         '''
         #TODO: implement checking more than one sensor per actuator
-        if sensor.latest_value < sensor.lower_limit || sensor.latest_value > sensor.upper_limit:
-            self.handler(outside_bound_value)
+        if (sensor.latest_value < sensor.lower_limit) or (sensor.latest_value > sensor.upper_limit):
+            self.handler.control(outside_bound_value)
         else:
-            self.handler(inside_bound_value)
+            self.handler.control(inside_bound_value)
 
     def all_values(self):
         '''
@@ -80,4 +79,11 @@ class Actuators:
                 'buzzer': self.buzzer.control(),
                 'humidifier':self.humidifier.control()}
  
+actuators = Actuators(
+                main_psu_pin = 1,
+                blue_light_pin = 3, 
+                uv_light_pin = 4, 
+                buzzer_pin = 14, 
+                humidifier_pin = 7)
+
 

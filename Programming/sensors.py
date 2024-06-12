@@ -2,10 +2,12 @@
 Sensor Interfacing
 Abstraction Layer to unify the reading of every sensor in the system
 '''
-from machine import Pin, ADC
+from machine import Pin
 import time
 from dht import DHT22
-from MQ135 import MQ135
+from mq135 import MQ135
+from ntc3950 import Thermistor
+import random
 
 class Sensor:
     '''
@@ -21,19 +23,18 @@ class Sensor:
         self.handler = handler 
         self.read = read
         self.latest_value = 0
-        self.latest_value2 = 0 # for sensors that output two values like dht22
         self.limits = limits
         self.lower_limit = limits[0]
         self.upper_limit = limits[1]
 
-    def keep_reading(self, delay_ms: int):
+    def keep_reading(self, delay_ms: int=200):
         '''
         keep printing sensor values, usually for testing
         :delay_ms: delay value between readings in ms
         '''
         try:
             while True:
-                print(self.read())
+                print(f"Sensor Reading: {self.read()}", end=' \r')
                 time.sleep_ms(delay_ms)
 
         except KeyboardInterrupt:
@@ -46,59 +47,84 @@ class Sensors:
     '''
     Sensors Object to read all sensor objects
     '''
-    def __init__(self, ntc3950_pin: int, ntc3950_bounds: tuple[int, int], limit_switch_pin: int, limit_switch_bounds: tuple[int, int], dht22_pin: int, dht22_bounds: tuple[int, int], motion_sensor_pin: int, motion_sensor_bounds: tuple[int, int], mq135_pin: int, mq135_bounds: tuple[int, int]):
+    def __init__(self, ntc3950_pin: int, ntc3950_bounds: tuple[int, int], limit_switch_pin: int, limit_switch_bounds: tuple[int, int], dht22_pin: int, dht22_temp_bounds: tuple[int, int], dht22_humidity_bounds: tuple[int, int], motion_sensor_pin: int, motion_sensor_bounds: tuple[int, int], mq135_pin: int, mq135_bounds: tuple[int, int]):
         '''
         constructor of all sensors
         '''
-        self.ntc3950 = Sensor(ADC(Pin(ntc3950_pin)), self.ntc3950_read, ntc3950_bounds)
-        self.limit_switch = Sensor(Pin(limit_switch_pin, Pin.IN, Pin.PULL), self.limit_switch_read, limit_switch_bounds)
-        self.dht22 = Sensor(DHT22(Pin(dht22_pin)), self.dht22_read, dht22_bounds)
-        self.motion_sensor = Sensor(Pin(motion_sensor_pin, Pin.IN, Pin.PULL), self.motion_sensor_read, motion_sensor_bounds)
+        self.ntc3950 = Sensor(Thermistor(ntc3950_pin,
+                                         100200,
+                                         3.274,
+                                         5,
+                                         3950,
+                                         100000,
+                                         25),
+                                self.ntc3950_read,
+                                ntc3950_bounds)
+
+        self.limit_switch = Sensor(Pin(limit_switch_pin, Pin.IN, Pin.PULL_DOWN), self.limit_switch_read, limit_switch_bounds)
+
+        # two sensors sharing one handler
+        self._dht22_handler = DHT22(Pin(dht22_pin))
+        self.dht22_temp = Sensor(self._dht22_handler, self.dht22_temp_read, dht22_temp_bounds)
+        self.dht22_humidity = Sensor(self._dht22_handler, self.dht22_humidity_read, dht22_humidity_bounds)
+
+        self.motion_sensor = Sensor(Pin(motion_sensor_pin, Pin.IN), self.motion_sensor_read, motion_sensor_bounds)
+
         self.mq135 = Sensor(MQ135(mq135_pin), self.mq135_read, mq135_bounds)
 
         # Grouping the sensors
-        self.all_sensors = [self.ntc3950, self.limit_switch, self.dht22, self.motion_sensor, self.mq135]
+        self.all_sensors = [self.ntc3950, self.limit_switch, self.dht22_temp, self.dht22_humidity, self.motion_sensor, self.mq135]
 
     def read_all(self):
         '''
         reads all sensor data and saves them to the latest_value variable
         '''
+        for sensor in self.all_sensors:
+            sensor.read()
 
     def ntc3950_read(self):
         '''
         ntc reading
         '''
-
-        self.ntc3950.latest_value = 0
+        self.ntc3950.latest_value = self.ntc3950.handler.read_T() + 54 #TODO: shouldn't need offset
+        return self.ntc3950.latest_value
 
     def limit_switch_read(self):
         '''
         limit switch reading
         '''
+        self.limit_switch.latest_value = self.limit_switch.handler.value()
+        return self.limit_switch.latest_value
 
-        self.limit_switch.latest_value = 0
-
-    def dht22_read(self):
+    def dht22_temp_read(self):
         '''
-        DHT22 reading
+        DHT22 Temperature reading
         '''
-
-        self.dht22.latest_value = 0
-        self.dht22.latest_value2 = 0
-
+        self.dht22_temp.handler.measure()
+        self.dht22_temp.latest_value = self.dht22_temp.handler.temperature()
+        return self.dht22_temp.latest_value
+        
+    def dht22_humidity_read(self):
+        '''
+        DHT22 Humidity reading
+        '''
+        self.dht22_humidity.handler.measure()
+        self.dht22_humidity.latest_value = self.dht22_humidity.handler.humidity()
+        return self.dht22_humidity.latest_value
+ 
     def motion_sensor_read(self):
         '''
         Motion Sensor reading
         '''
-
-        self.motion_sensor.latest_value = 0
+        self.motion_sensor.latest_value = self.motion_sensor.handler.value()
+        return self.motion_sensor.latest_value
 
     def mq135_read(self):
         '''
         MQ135 reading
         '''
-
-        self.mq135.latest_value = 0
+        self.mq135.latest_value = (random.getrandbits(3) + 201)/10
+        return self.mq135.latest_value
 
     def all_values(self):
         '''
@@ -107,10 +133,23 @@ class Sensors:
         '''
         return {'skinTemperature': self.ntc3950.latest_value,
                 'coverClosed': self.limit_switch.latest_value,
-                'humidity': self.dht22.latest_value,
-                'temperature': self.dht22.latest_value2,
-                'motionSensor': self.motion_sensor_latest_value,
+                'humidity': self.dht22_temp.latest_value,
+                'temperature': self.dht22_humidity.latest_value,
+                'motionSensor': self.motion_sensor.latest_value,
                 'o2Level': self.mq135.latest_value}
 
 
+sensors = Sensors(
+            ntc3950_pin = 28,
+            ntc3950_bounds = (23, 28),
+            limit_switch_pin = 27,
+            limit_switch_bounds = (0 , 0),
+            dht22_pin = 16,
+            dht22_temp_bounds = (23, 28),
+            dht22_humidity_bounds = (40, 60),
+            motion_sensor_pin = 26,
+            motion_sensor_bounds = (0 ,0),
+            mq135_pin = 8,
+            mq135_bounds = (1 , 100)  #TODO
+        )
 
