@@ -5,94 +5,67 @@ Incubator Controller Main MCU
     -   Control algorithms linking sensor data with actuator actions
     -   Monitor System (oled and web)
 '''
-def main():
-    from sensors import sensors
-    from actuators import actuators
-    from server import server, HTML_REQUEST
-    import _thread
-    from machine import Pin, Timer
+from sensors import sensors
+from actuators import actuators
+from server2 import Server
+import _thread
+from machine import Pin, Timer, I2C
+import ssd1306
 
-    led = Pin('LED', Pin.OUT)
-    print("All System Components Up!")
+print("All System Components Up!")
 
-    class SysMode:
-        MANUAL = 0
-        AUTO = 1
-
-
-    system_mode = SysMode.MANUAL
-    def controller_core():
-        '''
-        Main Routine for the first core which reads the sensor data 
-         and controls the actuators
-        '''
-        global system_mode
-        # System start in Auto-Mode
-        while True:
-
-            # Always read all sensors
-            sensors.read_all()
-
-            if system_mode == SysMode.AUTO:
-                # Closed Loop Control
-                #TODO: implement more than one bound for sensor that output more than one value
-                actuators.main_psu.constraint(sensors.dht22)
-
-            # elif system_mode == SysMode.MANUAL:
-                # Nothing?!
+class SysMode:
+    MANUAL = 0
+    AUTO = 1
 
 
-    def server_core():
-        '''
-        Main Routine for the second core which is hosts a web app to control and monitor the whole system
+system_mode = SysMode.MANUAL
+def controller_core():
+    '''
+    Main Routine for the first core which reads the sensor data 
+     and controls the actuators
+    '''
+    global system_mode
+    # System start in Auto-Mode
+    while True:
 
-        '''
+        # Always read all sensors
+        sensors.read_all()
 
-        tim = Timer(-1)
-        while True:
+        if system_mode == SysMode.AUTO:
+            # Closed Loop Control
+            #TODO: implement more than one bound for sensor that output more than one value
+            actuators.main_psu.constraint(sensors.dht22)
 
-            tim.init(period=500, mode=Timer.PERIODIC, callback=lambda t: led.value(not led.value()))
-            try:
-
-                server.wait_for_client()
-
-                html_request_full = server.get_html_request()
-                print(f"HTML Request: {html_request_full}")
-
-                if html_request_full:
-                    html_request, pin_id, pin_value = html_request_full
-
-                    switch_values = [b'on', b'off']
-
-                    if html_request == HTML_REQUEST.GET_SENSOR_ACTUATOR:
-                        values = sensors.all_values
-                        values.extend(actuators.all_values)
-                        server.handle_get_values(values)
-
-                    elif html_request == HTML_REQUEST.POST_SWITCH:
-                        print("TODO:")
-
-                    elif html_request == HTML_REQUEST.GET_WEB:
-                        values = None
-                        server.handle_get_web(values)
-
-                    else:
-                        raise ValueError("HOW THE FUCK?!?!")
-
-                else:
-                    server.client.close()
+        # elif system_mode == SysMode.MANUAL:
+            # Nothing?!
 
 
-            except Exception as e:
-                print(f"Error in Main Server Loop: {e}")
-                tim.deinit()
+def server_core():
+    '''
+    Main Routine for the second core which is hosts a web app to control and monitor the whole system
 
-        tim.deinit
+    '''
+    server = Server()
+    # display = ssd1306.SSD1306_I2C(128, 64, I2C(1, scl=Pin(19), sda=Pin(18)))
+    while True:
+        server.wait_for_client()
+
+        server.handle_html_request(server.identify_html_request())
+
+        # global_vars.update(server.actuators_dict)
+        # display.fill(0)
+        # display.text("test", 0, 0, 1)
+        # display.show()
+
+        server.led.toggle()
+
+        print('\n')
 
 
-    _thread.start_new_thread(server_core, ())
-    controller_core()
 
-# main()
+# _thread.start_new_thread(server_core, ())
+# controller_core()
 
-
+sleep(5)
+server_core()
