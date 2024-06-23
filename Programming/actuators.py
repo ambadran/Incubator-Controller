@@ -32,6 +32,7 @@ class Actuators:
     '''
     Class to control All Actuators and initialize them
     '''
+    JAVASCRIPT_TO_PYTHON = {'on': 1, 'off': 0}
     def __init__(self, main_psu_pin: int, blue_light_pin: int, uv_light_pin: int, buzzer_pin: int, humidifier_pin: int):
         '''
         Constructor for actuator objects
@@ -79,12 +80,17 @@ class Actuators:
                 'uvLight': self.uv_light.control(),
                 'buzzer': self.buzzer.control(),
                 'humidifier':self.humidifier.control()}
- 
-actuators = Actuators(
-                main_psu_pin = 1,
-                blue_light_pin = 3, 
-                uv_light_pin = 4, 
-                buzzer_pin = 14, 
-                humidifier_pin = 7)
+
+    @all_values.setter
+    def all_values(self, actuator_dict):
+        '''
+        sets all the actuator values according to the global actuator_dict received from server
+        '''
+
+        self.main_psu.control(self.JAVASCRIPT_TO_PYTHON[actuator_dict['psuControl']])
+        self.blue_light.control(self.JAVASCRIPT_TO_PYTHON[actuator_dict['blueLight']])
+        self.uv_light.control(self.JAVASCRIPT_TO_PYTHON[actuator_dict['uvLight']])
+        self.buzzer.control(self.JAVASCRIPT_TO_PYTHON[actuator_dict['buzzer']])
+        self.humidifier.control(self.JAVASCRIPT_TO_PYTHON[actuator_dict['humidifier']])
 
 

@@ -140,17 +140,4 @@ class Sensors:
                 'o2Level': self.mq135.latest_value}
 
 
-sensors = Sensors(
-            ntc3950_pin = 28,
-            ntc3950_bounds = (23, 28),
-            limit_switch_pin = 27,
-            limit_switch_bounds = (0 , 0),
-            dht22_pin = 16,
-            dht22_temp_bounds = (23, 28),
-            dht22_humidity_bounds = (40, 60),
-            motion_sensor_pin = 26,
-            motion_sensor_bounds = (0 ,0),
-            mq135_pin = 8,
-            mq135_bounds = (1 , 100)  #TODO
-        )
 

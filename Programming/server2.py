@@ -37,19 +37,22 @@ class Server:
         self.init_access_point()
         self.init_socket()
 
+        self.sensors_dict = {
+                    'skinTemperature': 0,
+                    'coverClosed': 0,
+                    'humidity': 0,
+                    'temperature': 0,
+                    'motionSensor': 0,
+                    'o2Level': 0
+                }
+
         self.actuators_dict = {
-               'mechanism1': 0,
-               'mechanism2': 0,
-               'mechanism3': 0,
-               'water1': 0,
-               'water2': 0,
-               'water3': 0,
-               'fertilizer1': 0,
-               'fertilizer2': 0,
-               'fertilizer3': 0,
-               'light1': 50,
-               'light2': 50,
-               'light3': 50
+               'autoManualSwitch': 'off',
+               'psuControl': 'off',
+               'blueLight': 'off',
+               'uvLight': 'off',
+               'buzzer': 'off',
+               'humidifier': 'off'
                }
 
         self.IDENTIFY_HTML_REQUEST = {
@@ -70,6 +73,7 @@ class Server:
         just deactivate and activate again 
         '''
         self.station = network.WLAN(network.AP_IF)
+        self.station.config(ssid=self.SSID, password=self.PASSWORD)
 
         self.station.active(False)
         sleep(2)
@@ -112,28 +116,35 @@ class Server:
         This socket is distinct from the listening socket (s) 
         and is used for sending and receiving data with the specific client that connected.
         '''
-        try:
-            self.station.config(ssid=self.SSID, password=self.PASSWORD)
-            sleep_ms(500)
+        # try:
+        self.station.config(ssid=self.SSID, password=self.PASSWORD)
+        sleep_ms(500)
 
-            self.client, addr = self.s.accept()
-            print('Got a connection from %s' % str(addr))
-        except Exception as e:
-            print(f"Caught: {e}")
-        # finally:
-        #     self.client.close()
+        self.client, addr = self.s.accept()
+        # print('Got a connection from {str(addr)}', end=' \r')
+        print(f"Got a connection from {str(addr)}")
+        # except Exception as e:
+        #     print(f"Caught: {e}")
 
     def identify_html_request(self) -> HTML_REQUEST:
         '''
         return what HTML request is given. 
         Every HTML request must be mapped to a function that handles it.
         '''
+        # try:
         self.request = self.client.recv(1024).decode()
         
         tmp = self.request.split(' ')
-        tmp = tmp[0] + ' ' + tmp[1]
+
+        if len(tmp) > 1:
+            tmp = tmp[0] + ' ' + tmp[1]
+        else:
+            tmp = tmp[0]
 
         return self.IDENTIFY_HTML_REQUEST.get(tmp, None)
+        # except Exception as e:
+        #     print(f"Caught in identify html: {e}")
+        #     print(f"on Request {self.request}")
 
     def handle_html_request(self, html_request: HTML_REQUEST):
         '''
@@ -182,7 +193,7 @@ class Server:
         length = int(self.request.split('Content-Length: ')[1].split('\r\n')[0])
         body = json.loads(self.client.recv(length).decode('utf-8'))
 
-        #TODO:
+        self.actuators_dict[body['id']] = body['state']
 
         response = 'HTTP/1.1 200 OK\r\n\r\n'
         self.client.send(response)
@@ -191,23 +202,26 @@ class Server:
         '''
 
         '''
-        switch_values = [b'on', b'off']
+        # switch_values = [b'on', b'off']
+        # self.all_values = {
+        #         'skinTemperature': random.getrandbits(4),
+        #         'coverClosed': random.getrandbits(4),
+        #         'humidity': random.getrandbits(4),
+        #         'temperature': random.getrandbits(4),
+        #         'motionSensor': random.getrandbits(4),
+        #         'o2Level': random.getrandbits(4),
+        #         'autoManualSwitch': switch_values[random.getrandbits(1)],
+        #         'psuControl': switch_values[random.getrandbits(1)],
+        #         'blueLight': switch_values[random.getrandbits(1)],
+        #         'uvLight': switch_values[random.getrandbits(1)],
+        #         'buzzer': switch_values[random.getrandbits(1)],
+        #         'humidifier': switch_values[random.getrandbits(1)],
+        # }
 
-        self.all_values = {'skinTemperature': random.getrandbits(4),
-        'coverClosed': random.getrandbits(4),
-        'humidity': random.getrandbits(4),
-        'temperature': random.getrandbits(4),
-        'motionSensor': random.getrandbits(4),
-        'o2Level': random.getrandbits(4),
-        'autoManualSwitch': switch_values[random.getrandbits(1)],
-        'psuControl': switch_values[random.getrandbits(1)],
-        'blueLight': switch_values[random.getrandbits(1)],
-        'uvLight': switch_values[random.getrandbits(1)],
-        'buzzer': switch_values[random.getrandbits(1)],
-        'humidifier': switch_values[random.getrandbits(1)],
-        }
+        tmp = self.sensors_dict
+        tmp.update(self.actuators_dict)
 
-        response = json.dumps(values)
+        response = json.dumps(tmp)
         self.client.send('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n')
         self.client.send(response)
 
